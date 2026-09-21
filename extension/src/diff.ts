@@ -34,8 +34,9 @@ export function changedSpan(oldText: string, newText: string): Span | null {
 
   // Snap the start back to a line boundary. Beginning mid-line looks like a
   // rendering glitch; beginning at the start of the changed line reads as a
-  // person rewriting that line.
-  const start = oldText.lastIndexOf('\n', prefix - 1) + 1;
+  // person rewriting that line. (lastIndexOf clamps a negative fromIndex to 0,
+  // so prefix 0 needs its own case or a leading '\n' would be skipped.)
+  const start = prefix === 0 ? 0 : oldText.lastIndexOf('\n', prefix - 1) + 1;
 
   return {
     start,
