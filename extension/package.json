@@ -3,7 +3,7 @@
   "displayName": "Slowtype for Claude Code",
   "description": "Watch Claude Code type its code into your editor, character by character.",
   "version": "0.1.0",
-  "publisher": "iauro",
+  "publisher": "chinmay1819",
   "private": true,
   "engines": {
     "vscode": "^1.85.0"
