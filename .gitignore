@@ -1,0 +1,11 @@
+node_modules/
+extension/out/
+extension/hook/
+*.vsix
+.slowtype-payloads.jsonl
+
+# demo/ is the scratch workspace the Extension Development Host opens. Only its
+# README is tracked: everything else is output from test sessions, and
+# .claude/settings.json holds an absolute path to this machine's checkout.
+demo/*
+!demo/README.md

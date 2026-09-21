@@ -1,0 +1,92 @@
+{
+  "name": "slowtype",
+  "displayName": "Slowtype for Claude Code",
+  "description": "Watch Claude Code type its code into your editor, character by character.",
+  "version": "0.1.0",
+  "publisher": "iauro",
+  "private": true,
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "slowtype.fastForward",
+        "title": "Slowtype: Fast-forward current file"
+      },
+      {
+        "command": "slowtype.skipAll",
+        "title": "Slowtype: Skip remaining writes"
+      },
+      {
+        "command": "slowtype.toggle",
+        "title": "Slowtype: Toggle on/off"
+      },
+      {
+        "command": "slowtype.setSpeed",
+        "title": "Slowtype: Set typing speed"
+      },
+      {
+        "command": "slowtype.installHook",
+        "title": "Slowtype: Install Claude Code hook"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "slowtype.fastForward",
+        "key": "ctrl+alt+.",
+        "mac": "ctrl+alt+."
+      },
+      {
+        "command": "slowtype.skipAll",
+        "key": "ctrl+alt+shift+.",
+        "mac": "ctrl+alt+shift+."
+      }
+    ],
+    "configuration": {
+      "title": "Slowtype",
+      "properties": {
+        "slowtype.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Animate Claude Code's file writes."
+        },
+        "slowtype.charsPerSecond": {
+          "type": "number",
+          "default": 10,
+          "minimum": 1,
+          "description": "Effective typing speed, pauses included. For scale: a quick programmer types 6-8 characters/second; above ~20 it stops reading as a person."
+        },
+        "slowtype.expressiveness": {
+          "type": "number",
+          "default": 1,
+          "minimum": 0,
+          "description": "Scales the pauses at line ends and block openings. 0 types at a flat rate."
+        },
+        "slowtype.maxAnimationSeconds": {
+          "type": "number",
+          "default": 420,
+          "description": "Changes estimated to take longer than this are applied without animation. Must stay under Claude Code's 600s hook timeout.",
+          "maximum": 540
+        }
+      }
+    }
+  },
+  "scripts": {
+    "bundle": "mkdir -p hook && cp ../hook/slowtype-hook.mjs hook/",
+    "compile": "npm run bundle && tsc -p .",
+    "watch": "tsc -p . -w"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.4.0"
+  }
+}

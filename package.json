@@ -1,0 +1,12 @@
+{
+  "name": "claude-code-slowtype",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Watch Claude Code type its code into VS Code, character by character.",
+  "type": "module",
+  "scripts": {
+    "build": "cd extension && npm install && npm run compile",
+    "test": "npm run build && node test/run.mjs",
+    "capture": "SLOWTYPE_DEBUG_LOG=$PWD/.slowtype-payloads.jsonl node hook/slowtype-hook.mjs"
+  }
+}
