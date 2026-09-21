@@ -27,6 +27,16 @@ has('node build.mjs', '/proj/build.mjs');
 // Relative to the command's cwd, not the project root.
 has('cat > local.ts <<EOF\nx\nEOF', '/proj/sub/local.ts', '/proj/sub');
 
+// More shapes.
+has("sed -i 's/a/b/' one.ts two.ts", '/proj/one.ts');
+has("sed -i 's/a/b/' one.ts two.ts", '/proj/two.ts');
+has('echo x > "my file.ts"', '/proj/my file.ts');
+has("echo x > 'quoted.ts'", '/proj/quoted.ts');
+has('make 2> err.log', '/proj/err.log');
+has('install -m 644 a.conf etc/b.conf', '/proj/etc/b.conf');
+has('echo x > /proj/abs.ts', '/proj/abs.ts');
+has('cat > ../sibling.ts <<EOF\nx\nEOF', '/proj/sibling.ts', '/proj/sub');
+
 // --- things we must not touch ----------------------------------------------
 lacks('cat > /etc/hosts <<EOF\nx\nEOF', '/etc/hosts');
 lacks('cat ../../outside.ts', '/outside.ts');
@@ -37,6 +47,20 @@ lacks('rm -rf build > /dev/null', '/dev/null');
 lacks('cmd 2>&1', '/proj/&1');
 lacks('cat > "$TARGET" <<EOF\nx\nEOF', '/proj/$TARGET');
 lacks('rm *.ts > out.log 2>&1', '/proj/*.ts');
+lacks('echo x > .venv/lib/a.py', '/proj/.venv/lib/a.py');
+lacks('echo x > .git/config', '/proj/.git/config');
+lacks('echo x > dist/bundle.min.js', '/proj/dist/bundle.min.js');
+lacks('echo x > app.min.css', '/proj/app.min.css');
+lacks('echo x > $(pwd)/f.ts', '/proj/$(pwd)/f.ts');
+lacks('echo x > ../proj-other/f.ts', '/proj-other/f.ts');
+{
+  // A sibling directory that shares the project's name as a prefix is still outside.
+  assert.deepStrictEqual(find('echo x > /proj2/f.ts'), [], '/proj2 is not inside /proj');
+}
+{
+  // A cwd outside the project resolves outside it, so nothing is watched.
+  assert.deepStrictEqual(find('echo x > f.ts', '/elsewhere'), [], 'cwd outside project targets nothing');
+}
 
 // A read-only command should find nothing worth animating.
 assert.deepStrictEqual(find('grep -r "foo" .'), [], 'grep targets nothing');
@@ -76,5 +100,18 @@ assert.deepStrictEqual(find('git status'), [], 'git status targets nothing');
   assert.ok(!byPath['/proj/same.ts'], 'untouched files are not replayed');
   assert.ok(!byPath['/proj/gone.ts'], 'deleted files are not replayed');
 }
+{
+  // Still absent after the command: nothing to replay.
+  const snap = { files: new Map([['/proj/never.ts', null]]) };
+  assert.deepStrictEqual(diffSnapshot(snap, () => null), []);
+}
+{
+  // Truncating an existing file to empty is a change, and it is reported.
+  const snap = { files: new Map([['/proj/t.ts', 'content']]) };
+  assert.deepStrictEqual(diffSnapshot(snap, () => ''), [
+    { filePath: '/proj/t.ts', before: 'content', after: '' },
+  ]);
+}
+assert.deepStrictEqual(diffSnapshot({ files: new Map() }, () => 'x'), [], 'empty snapshot');
 
 console.log('ok  bash write detection');

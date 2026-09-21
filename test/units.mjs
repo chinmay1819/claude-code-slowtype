@@ -1,5 +1,6 @@
 // Unit tests for the pure logic (diff + pacing), run against the compiled output.
 import assert from 'node:assert';
+import fs from 'node:fs';
 import { changedSpan } from '../extension/out/diff.js';
 import { Typist, estimateMs } from '../extension/out/pacing.js';
 
@@ -36,6 +37,44 @@ const P = { charsPerSecond: 55, expressiveness: 1 };
   const newT = 'keep\nkeep2\n';
   const s = changedSpan(oldT, newT);
   assert.strictEqual(oldT.slice(0, s.start) + s.insert + oldT.slice(s.end), newT);
+}
+{
+  // A mid-line change on the first line snaps to offset 0, not -1.
+  const s = changedSpan('abc', 'abd');
+  assert.deepStrictEqual(s, { start: 0, end: 3, insert: 'abd' });
+}
+{
+  // Regression: a change at offset 0 of a file that starts with a blank line.
+  // lastIndexOf('\n', -1) finds that newline, which used to push the start past
+  // the change and produce an empty span.
+  const s = changedSpan('\nx', 'ax');
+  assert.deepStrictEqual(s, { start: 0, end: 1, insert: 'a' });
+}
+{
+  // CRLF files: snapping stops after the \n, never splitting \r\n.
+  const oldT = 'a\r\nb\r\n';
+  const newT = 'a\r\nc\r\n';
+  const s = changedSpan(oldT, newT);
+  assert.strictEqual(s.start, 3, 'span starts after the CRLF');
+  assert.strictEqual(oldT.slice(0, s.start) + s.insert + oldT.slice(s.end), newT);
+}
+{
+  // Every span must reconstruct the new text, whatever the inputs. Seeded so a
+  // failure is reproducible.
+  let seed = 1;
+  const rnd = () => ((seed = (seed * 1103515245 + 12345) >>> 0) / 2 ** 32);
+  const alphabet = 'ab\n \t{}\r';
+  const gen = () => Array.from({ length: (rnd() * 20) | 0 }, () => alphabet[(rnd() * alphabet.length) | 0]).join('');
+  for (let i = 0; i < 2000; i++) {
+    const oldT = gen();
+    const newT = rnd() < 0.5 ? gen() : oldT.slice(0, (rnd() * oldT.length) | 0) + gen() + oldT.slice((rnd() * oldT.length) | 0);
+    const s = changedSpan(oldT, newT);
+    if (oldT === newT) { assert.strictEqual(s, null); continue; }
+    assert.ok(s.start <= s.end && s.end <= oldT.length, `span in bounds for ${JSON.stringify([oldT, newT])}`);
+    assert.ok(s.start === 0 || oldT[s.start - 1] === '\n', 'span starts at a line boundary');
+    assert.strictEqual(oldT.slice(0, s.start) + s.insert + oldT.slice(s.end), newT,
+      `span reconstructs ${JSON.stringify([oldT, newT])}`);
+  }
 }
 
 // --- pacing ----------------------------------------------------------------
@@ -117,6 +156,42 @@ const ticks = (text, opts = P) => {
   // estimateMs must terminate on pathological input.
   const big = 'x'.repeat(20000);
   assert.ok(estimateMs(big, { charsPerSecond: 1000, expressiveness: 1 }) > 0);
+}
+{
+  // Empty text: nothing to type, and no division surprises.
+  assert.ok(new Typist('', P).done, 'empty text is done immediately');
+  assert.strictEqual(estimateMs('', P), 0);
+}
+{
+  // charsPerSecond is the *effective* rate, pauses included, and
+  // expressiveness redistributes time rather than adding it. Both claims are
+  // what make the settings predictable.
+  const text = fs.readFileSync(new URL('../extension/src/diff.ts', import.meta.url), 'utf8');
+  for (const charsPerSecond of [6, 10, 20]) {
+    const desired = (text.length / charsPerSecond) * 1000;
+    for (const expressiveness of [0, 0.5, 1, 2]) {
+      const ratio = estimateMs(text, { charsPerSecond, expressiveness }) / desired;
+      assert.ok(Math.abs(ratio - 1) < 0.05,
+        `${charsPerSecond} c/s at expressiveness ${expressiveness} should take ~${desired | 0}ms (ratio ${ratio.toFixed(3)})`);
+    }
+  }
+}
+{
+  // Above the timer floor, chunks widen instead of delays shrinking. The text
+  // must still reconstruct exactly, and chunks must not run past a token.
+  const text = 'export function add(a: number, b: number) {\n  return a + b; // "sum"\n}\n'.repeat(3);
+  const t = ticks(text, { charsPerSecond: 5000, expressiveness: 1 });
+  assert.strictEqual(t.map((x) => x.text).join(''), text, 'high-speed chunks reproduce the text');
+  assert.ok(t.some((x) => x.chunk > 1), 'high speed widens chunks');
+  assert.ok(t.every((x) => x.delayMs >= 16), 'high speed still respects the timer floor');
+}
+{
+  // Nonsense settings must degrade, not hang or produce NaN.
+  for (const opts of [{ charsPerSecond: 0, expressiveness: 1 }, { charsPerSecond: 10, expressiveness: -1 }]) {
+    const ms = estimateMs('const x = 1;\n', opts);
+    assert.ok(Number.isFinite(ms) && ms > 0, `estimateMs finite for ${JSON.stringify(opts)}`);
+    assert.strictEqual(ticks('const x = 1;\n', opts).map((x) => x.text).join(''), 'const x = 1;\n');
+  }
 }
 
 console.log('ok  diff + pacing');

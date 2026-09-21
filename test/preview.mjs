@@ -32,6 +32,33 @@ assert.strictEqual(
 );
 assert.strictEqual(applyEdit('abc', { old_string: '', new_string: 'x' }), null);
 assert.strictEqual(applyEdit('abc', { old_string: 'a', new_string: 'a' }), null, 'no-op edit');
+assert.strictEqual(
+  applyEdit('abc', { old_string: 'zzz', new_string: 'x', replace_all: true }),
+  null,
+  'replace_all with no match is skipped too'
+);
+assert.strictEqual(applyEdit('abc', { old_string: 'a' }), null, 'missing new_string is skipped');
+assert.strictEqual(applyEdit('abc', null), null, 'missing edit is skipped');
+assert.strictEqual(applyEdit('abc', { old_string: 'b', new_string: '' }), 'ac', 'deletion via empty new_string');
+{
+  // new_string is literal text. `$&`, `$1` and `$$` must not be treated as
+  // String.replace patterns.
+  assert.strictEqual(applyEdit('let a;', { old_string: 'a', new_string: '$&$1$$' }), 'let $&$1$$;');
+  assert.strictEqual(
+    applyEdit('a a', { old_string: 'a', new_string: '$&', replace_all: true }),
+    '$& $&'
+  );
+}
+{
+  // Overlapping candidates: 'aa' occurs twice in 'aaa' (at 0 and 1), but the
+  // uniqueness check only looks for non-overlapping repeats.
+  assert.strictEqual(applyEdit('aaa', { old_string: 'aa', new_string: 'b' }), 'ba');
+}
+assert.strictEqual(targetTextFor('Write', { content: '' }, 'old'), '', 'writing an empty file is still a write');
+assert.strictEqual(targetTextFor('Write', { content: 42 }, 'old'), null, 'non-string content is skipped');
+assert.strictEqual(targetTextFor('Write', undefined, 'old'), null, 'missing input is skipped');
+assert.strictEqual(targetTextFor('Edit', { old_string: 'x', new_string: 'y' }, ''), null,
+  'an edit against a missing (empty) file is skipped');
 
 // --- MultiEdit -------------------------------------------------------------
 {
@@ -65,7 +92,30 @@ assert.strictEqual(applyEdit('abc', { old_string: 'a', new_string: 'a' }), null,
   }, 'a');
   assert.strictEqual(out, null);
 }
+{
+  // An edit that only becomes ambiguous because of an earlier edit still
+  // sinks the batch.
+  const out = targetTextFor('MultiEdit', {
+    edits: [
+      { old_string: 'a', new_string: 'b' },
+      { old_string: 'b', new_string: 'c' },
+    ],
+  }, 'a b');
+  assert.strictEqual(out, null);
+}
+{
+  // replace_all is honoured per edit inside a batch.
+  const out = targetTextFor('MultiEdit', {
+    edits: [
+      { old_string: 'x', new_string: 'y', replace_all: true },
+      { old_string: 'end', new_string: 'END' },
+    ],
+  }, 'x x end');
+  assert.strictEqual(out, 'y y END');
+}
 assert.strictEqual(targetTextFor('MultiEdit', { edits: [] }, 'a'), null);
+assert.strictEqual(targetTextFor('MultiEdit', {}, 'a'), null, 'missing edits is skipped');
+assert.strictEqual(targetTextFor('MultiEdit', { edits: 'nope' }, 'a'), null, 'non-array edits is skipped');
 assert.strictEqual(targetTextFor('Bash', {}, 'a'), null, 'unknown tools are ignored');
 
 console.log('ok  preview matches tool semantics');

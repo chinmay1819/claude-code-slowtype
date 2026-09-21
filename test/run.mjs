@@ -1,6 +1,9 @@
 import { execFileSync } from 'node:child_process';
 
-const suites = ['units.mjs', 'preview.mjs', 'bash.mjs', 'socketpath.mjs', 'roundtrip.mjs'];
+const suites = [
+  'units.mjs', 'preview.mjs', 'bash.mjs', 'socketpath.mjs', 'config.mjs',
+  'install.mjs', 'server.mjs', 'roundtrip.mjs', 'hook.mjs',
+];
 let failed = 0;
 
 for (const s of suites) {
